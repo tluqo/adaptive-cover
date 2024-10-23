@@ -393,10 +393,12 @@ class ClimateCoverState(NormalCoverState):
         if self.cover.valid:
             if self.climate_data.is_summer:
                 return super().get_state()
-            if self.climate_data.is_winter:
+            if self.climate_data.is_winter and self.cover.mode == "mode2":
                 # parallel to sun beams, not possible with single direction
-                return self.cover.default
-            return self.cover.default
+                return (beta + 90) / degrees * 100
+            if self.climate_data.is_winter:
+                return self.cover.max_pos
+        #            return self.cover.default
         return super().get_state()
 
     def pos_with_presence(self) -> int:
@@ -421,7 +423,7 @@ class ClimateCoverState(NormalCoverState):
                 # parallel to sun beams, not possible with single direction
                 return 0
             if not self.cover.sunset_valid:
-                return 100
+                return self.cover.max_pos
         return super().get_state_pos()
 
     def tilt_state(self):
