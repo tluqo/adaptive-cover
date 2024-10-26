@@ -403,39 +403,60 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
     async def async_set_manual_position_and_tilt(self, entity, position, tilt):
         """Call service to set cover position."""
-        service = SERVICE_SET_COVER_POSITION
-        service_data = {}
-        service_data[ATTR_ENTITY_ID] = entity
-
-        service_data[ATTR_POSITION] = position
-
-        self.wait_for_target[entity] = True
-        self.target_call[entity] = position
-        self.target_attr[entity] = "position"
-        _LOGGER.debug(
-            "Set wait for target %s and target call %s",
-            self.wait_for_target,
-            self.target_call,
-        )
-        _LOGGER.debug("Run %s with data %s", service, service_data)
-        await self.hass.services.async_call(COVER_DOMAIN, service, service_data)
 
         if self._cover_type == "cover_tilt":
-            service = SERVICE_SET_COVER_TILT_POSITION
+            cur_position = state_attr(self.hass, entity, "current_position")
+
+            if position != cur_position:
+                service = SERVICE_SET_COVER_POSITION
+                service_data = {}
+                service_data[ATTR_ENTITY_ID] = entity
+
+                service_data[ATTR_POSITION] = position
+
+                self.wait_for_target[entity] = True
+                self.target_call[entity] = position
+                self.target_attr[entity] = "position"
+                _LOGGER.debug(
+                    "Set wait for target %s and target call %s",
+                    self.wait_for_target,
+                    self.target_call,
+                )
+                _LOGGER.debug("Run %s with data %s", service, service_data)
+                await self.hass.services.async_call(COVER_DOMAIN, service, service_data)
+            else:
+                service = SERVICE_SET_COVER_TILT_POSITION
+                service_data = {}
+                service_data[ATTR_ENTITY_ID] = entity
+
+                service_data[ATTR_TILT_POSITION] = tilt
+
+                self.wait_for_target[entity] = True
+                self.target_call[entity] = tilt
+                self.target_attr[entity] = "tilt"
+                _LOGGER.debug(
+                    "Set wait for target %s and target call %s",
+                    self.wait_for_target,
+                    self.target_call,
+                )
+
+                _LOGGER.debug("Run %s with data %s", service, service_data)
+                await self.hass.services.async_call(COVER_DOMAIN, service, service_data)
+        else:
+            service = SERVICE_SET_COVER_POSITION
             service_data = {}
             service_data[ATTR_ENTITY_ID] = entity
 
-            service_data[ATTR_TILT_POSITION] = tilt
+            service_data[ATTR_POSITION] = position
 
             self.wait_for_target[entity] = True
-            self.target_call[entity] = tilt
-            self.target_attr[entity] = "tilt"
+            self.target_call[entity] = position
+            self.target_attr[entity] = "position"
             _LOGGER.debug(
                 "Set wait for target %s and target call %s",
                 self.wait_for_target,
                 self.target_call,
             )
-
             _LOGGER.debug("Run %s with data %s", service, service_data)
             await self.hass.services.async_call(COVER_DOMAIN, service, service_data)
 
@@ -535,6 +556,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     def is_wakeup_time(self):
         """Checks if time is after start time."""
         return False
+
         time_check = self.how_much_after_start_time
         return time_check < dt.timedelta(hours=1)
 
