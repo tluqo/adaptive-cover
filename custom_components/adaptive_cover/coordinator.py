@@ -534,7 +534,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     @property
     def is_wakeup_time(self):
         """Checks if time is after start time."""
-
+        return False
         time_check = self.how_much_after_start_time
         return time_check < dt.timedelta(hours=1)
 
@@ -597,10 +597,25 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             position = state_attr(self.hass, entity, "current_position")
             tilt = 0
         if position is not None and tilt is not None:
+            # todo: weird hack
+            is_to_edge_position = False
+            positions = [
+                options.get(CONF_SUNSET_POS),
+                options.get(CONF_SUNSET_TILT),
+                options.get(CONF_DEFAULT_HEIGHT),
+                options.get(CONF_DEFAULT_POSITION),
+                0,
+                100,
+            ]
+            if state_tilt in positions:
+                is_to_edge_position = True
+
             condition = (
                 abs(position - state_pos) >= self.min_change
                 or abs(tilt - state_tilt) >= self.min_change
+                or abs(tilt - state_tilt) > 0 and is_to_edge_position
             )
+            
             _LOGGER.debug(
                 "Entity: %s,  position: %s, state_pos: %s, tilt: %s, state_tilt: %s, delta position: %s, delta tilt: %s, min_change: %s, condition: %s",
                 entity,
@@ -613,17 +628,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 self.min_change,
                 condition,
             )
-            # todo: weird hack
-            positions = [
-                options.get(CONF_SUNSET_POS),
-                options.get(CONF_SUNSET_TILT),
-                options.get(CONF_DEFAULT_HEIGHT),
-                options.get(CONF_DEFAULT_POSITION),
-                0,
-                100,
-            ]
-            if state_tilt in positions:
-                condition = True
+            
             return condition
         return True
 
