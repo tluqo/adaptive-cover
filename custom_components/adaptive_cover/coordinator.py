@@ -7,7 +7,15 @@ import datetime as dt
 from dataclasses import dataclass
 
 import numpy as np
-from homeassistant.components.cover import DOMAIN as COVER_DOMAIN
+from homeassistant.components.cover import (
+    ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
+    ATTR_POSITION,
+    ATTR_TILT_POSITION,
+    DOMAIN as COVER_DOMAIN,
+)
+
+# from homeassistant.components.cover import DOMAIN as COVER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -26,6 +34,7 @@ from .calculation import (
     ClimateCoverState,
     NormalCoverState,
 )
+
 from .const import (
     _LOGGER,
     ATTR_POSITION,
@@ -144,6 +153,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self.wait_for_target = {}
         self.target_call = {}
         self.target_attr = {}
+        self.subsequent_target_call = {}
+        self.subsequent_target_attr = {}
         self.ignore_intermediate_states = self.config_entry.options.get(
             CONF_MANUAL_IGNORE_INTERMEDIATE, False
         )
@@ -190,10 +201,10 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             data["entity_id"], data["old_state"], data["new_state"]
         )
         self.cover_state_change = True
-        self.process_entity_state_change()
+        await self.process_entity_state_change()
         await self.async_refresh()
 
-    def process_entity_state_change(self):
+    async def process_entity_state_change(self):
         """Process state change event."""
         event = self.state_change_data
         _LOGGER.debug("Processing state change event: %s", event)
@@ -205,7 +216,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             _LOGGER.debug("Ignoring intermediate state change for %s", entity_id)
             return
         if self.wait_for_target.get(entity_id):
-            attribute = "current_tilt_position"
+            attribute = ATTR_CURRENT_TILT_POSITION
             if (
                 self.target_attr.get(entity_id)
                 and self.target_attr.get(entity_id) == "position"
@@ -213,8 +224,15 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 attribute = "current_position"
             position = event.new_state.attributes.get(attribute)
             if position == self.target_call.get(entity_id):
-                self.wait_for_target[entity_id] = False
                 _LOGGER.debug("Position %s reached for %s", position, entity_id)
+                if self.subsequent_target_attr.get(entity_id):
+                    tilt = self.subsequent_target_call.get(entity_id)
+                    self.subsequent_target_call[entity_id] = None
+                    self.subsequent_target_attr[entity_id] = None
+                    await self.async_set_position_and_tilt(entity_id, position, tilt)
+                else:
+                    self.wait_for_target[entity_id] = False
+
         _LOGGER.debug("Wait for target: %s", self.wait_for_target)
 
     async def _async_update_data(self) -> AdaptiveCoverData:
@@ -247,8 +265,10 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             await self.async_handle_state_change(state, options)
         if self.state_change and self._cover_type == "cover_tilt":
             await self.async_handle_state_change2(state_pos, state, options)
-        if self.cover_state_change:
+        if self.cover_state_change and not self._cover_type == "cover_tilt":
             await self.async_handle_cover_state_change(state)
+        if self.cover_state_change and self._cover_type == "cover_tilt":
+            await self.async_handle_cover_state_change2(state_pos, state)
         if self.first_refresh:
             await self.async_handle_first_refresh(state, options)
         if self.timed_refresh:
@@ -308,6 +328,20 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             self.manager.handle_state_change(
                 self.state_change_data,
                 state,
+                self._cover_type,
+                self.manual_reset,
+                self.wait_for_target,
+                self.manual_threshold,
+            )
+        self.cover_state_change = False
+
+    async def async_handle_cover_state_change2(self, position: int, tilt: int):
+        """Handle state change from assigned covers."""
+        if self.manual_toggle and self.control_toggle:
+            self.manager.handle_state_change2(
+                self.state_change_data,
+                position,
+                tilt,
                 self._cover_type,
                 self.manual_reset,
                 self.wait_for_target,
@@ -417,6 +451,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 self.wait_for_target[entity] = True
                 self.target_call[entity] = position
                 self.target_attr[entity] = "position"
+                self.subsequent_target_call[entity] = tilt
+                self.subsequent_target_attr[entity] = "tilt"
                 _LOGGER.debug(
                     "Set wait for target %s and target call %s",
                     self.wait_for_target,
@@ -586,9 +622,9 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     def check_position(self, entity, state: int, options):
         """Check cover positions to reduce calls."""
         if self._cover_type == "cover_tilt":
-            position = state_attr(self.hass, entity, "current_tilt_position")
+            position = state_attr(self.hass, entity, ATTR_CURRENT_TILT_POSITION)
         else:
-            position = state_attr(self.hass, entity, "current_position")
+            position = state_attr(self.hass, entity, ATTR_CURRENT_POSITION)
         if position is not None:
             condition = abs(position - state) >= self.min_change
             _LOGGER.debug(
@@ -613,10 +649,10 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     def check_position2(self, entity, state_pos: int, state_tilt: int, options):
         """Check cover positions to reduce calls."""
         if self._cover_type == "cover_tilt":
-            position = state_attr(self.hass, entity, "current_position")
-            tilt = state_attr(self.hass, entity, "current_tilt_position")
+            position = state_attr(self.hass, entity, ATTR_CURRENT_POSITION)
+            tilt = state_attr(self.hass, entity, ATTR_CURRENT_TILT_POSITION)
         else:
-            position = state_attr(self.hass, entity, "current_position")
+            position = state_attr(self.hass, entity, ATTR_CURRENT_POSITION)
             tilt = 0
         if position is not None and tilt is not None:
             # todo: weird hack
@@ -635,9 +671,10 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             condition = (
                 abs(position - state_pos) >= self.min_change
                 or abs(tilt - state_tilt) >= self.min_change
-                or abs(tilt - state_tilt) > 0 and is_to_edge_position
+                or abs(tilt - state_tilt) > 0
+                and is_to_edge_position
             )
-            
+
             _LOGGER.debug(
                 "Entity: %s,  position: %s, state_pos: %s, tilt: %s, state_tilt: %s, delta position: %s, delta tilt: %s, min_change: %s, condition: %s",
                 entity,
@@ -650,7 +687,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 self.min_change,
                 condition,
             )
-            
+
             return condition
         return True
 
@@ -910,9 +947,9 @@ class AdaptiveCoverManager:
         new_state = event.new_state
 
         if blind_type == "cover_tilt":
-            new_position = new_state.attributes.get("current_tilt_position")
+            new_position = new_state.attributes.get(ATTR_CURRENT_TILT_POSITION)
         else:
-            new_position = new_state.attributes.get("current_position")
+            new_position = new_state.attributes.get(ATTR_CURRENT_POSITION)
 
         if new_position != our_state:
             if (
@@ -933,6 +970,56 @@ class AdaptiveCoverManager:
             )
             self.mark_manual_control(entity_id)
             self.set_last_updated(entity_id, new_state, allow_reset)
+
+    def handle_state_change2(
+        self,
+        states_data,
+        our_position,
+        our_tilt,
+        blind_type,
+        allow_reset,
+        wait_target_call,
+        manual_threshold,
+    ):
+        """Process state change event."""
+        event = states_data
+        if event is None:
+            return
+        entity_id = event.entity_id
+        if entity_id not in self.covers:
+            return
+        if wait_target_call.get(entity_id):
+            return
+
+        new_state = event.new_state
+
+        if blind_type == "cover_tilt":
+            new_tilt = new_state.attributes.get(ATTR_CURRENT_TILT_POSITION)
+            new_position = new_state.attributes.get(ATTR_CURRENT_POSITION)
+        else:
+            new_position = new_state.attributes.get(ATTR_CURRENT_POSITION)
+
+        diff = 0
+        if new_tilt is not None:
+            diff = abs(our_tilt - new_tilt)
+
+        diff = diff + abs(our_position - new_position)
+
+        if manual_threshold is not None and diff < manual_threshold:
+            _LOGGER.debug(
+                "Position change is less than threshold %s for %s",
+                manual_threshold,
+                entity_id,
+            )
+            return
+        _LOGGER.debug(
+            "Set manual control for %s, for at least %s seconds, reset_allowed: %s",
+            entity_id,
+            self.reset_duration.total_seconds(),
+            allow_reset,
+        )
+        self.mark_manual_control(entity_id)
+        self.set_last_updated(entity_id, new_state, allow_reset)
 
     def set_last_updated(self, entity_id, new_state, allow_reset):
         """Set last updated time for manual control."""
