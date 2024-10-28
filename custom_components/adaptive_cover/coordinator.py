@@ -1005,21 +1005,22 @@ class AdaptiveCoverManager:
 
         diff = diff + abs(our_position - new_position)
 
-        if manual_threshold is not None and diff < manual_threshold:
+        if diff > 0:
+            if manual_threshold is not None and diff < manual_threshold:
+                _LOGGER.debug(
+                    "Position change is less than threshold %s for %s",
+                    manual_threshold,
+                    entity_id,
+                )
+                return
             _LOGGER.debug(
-                "Position change is less than threshold %s for %s",
-                manual_threshold,
+                "Set manual control for %s, for at least %s seconds, reset_allowed: %s",
                 entity_id,
+                self.reset_duration.total_seconds(),
+                allow_reset,
             )
-            return
-        _LOGGER.debug(
-            "Set manual control for %s, for at least %s seconds, reset_allowed: %s",
-            entity_id,
-            self.reset_duration.total_seconds(),
-            allow_reset,
-        )
-        self.mark_manual_control(entity_id)
-        self.set_last_updated(entity_id, new_state, allow_reset)
+            self.mark_manual_control(entity_id)
+            self.set_last_updated(entity_id, new_state, allow_reset)
 
     def set_last_updated(self, entity_id, new_state, allow_reset):
         """Set last updated time for manual control."""
