@@ -1003,7 +1003,8 @@ class AdaptiveCoverManager:
         if new_tilt is not None:
             diff = abs(our_tilt - new_tilt)
 
-        diff = diff + abs(our_position - new_position)
+        if new_position is not None:
+            diff = diff + abs(our_position - new_position)
 
         if diff > 0:
             if manual_threshold is not None and diff < manual_threshold:
