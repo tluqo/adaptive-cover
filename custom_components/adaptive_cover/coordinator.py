@@ -768,6 +768,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             ClimateCoverState(cover_data, climate).get_state_pos()
         )
         climate_data = ClimateCoverState(cover_data, climate).climate_data
+        self.control_method = "intermediate"
         if climate_data.is_summer and self.switch_mode:
             self.control_method = "summer"
         if climate_data.is_winter and self.switch_mode:
