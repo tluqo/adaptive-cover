@@ -396,8 +396,7 @@ class ClimateCoverState(NormalCoverState):
             if self.climate_data.is_winter and self.cover.mode == "mode2":
                 # parallel to sun beams, not possible with single direction
                 return (beta + 90) / degrees * 100
-            if self.climate_data.is_winter:
-                return self.cover.max_pos
+            return self.cover.max_pos
         #            return self.cover.default
         return super().get_state()
 
