@@ -215,13 +215,16 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         ]:
             _LOGGER.debug("Ignoring intermediate state change for %s", entity_id)
             return
+
+        is_final_state = event.new_state.state in ["open", "closed", "stopped"]
+
         if self.wait_for_target.get(entity_id):
             attribute = ATTR_CURRENT_TILT_POSITION
             if (
                 self.target_attr.get(entity_id)
                 and self.target_attr.get(entity_id) == "position"
             ) or self._cover_type != "cover_tilt":
-                attribute = "current_position"
+                attribute = ATTR_CURRENT_POSITION
             position = event.new_state.attributes.get(attribute)
             if position == self.target_call.get(entity_id):
                 _LOGGER.debug("Position %s reached for %s", position, entity_id)
@@ -232,6 +235,9 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                     await self.async_set_position_and_tilt(entity_id, position, tilt)
                 else:
                     self.wait_for_target[entity_id] = False
+            elif is_final_state:
+                self.manager.mark_manual_control(entity_id)
+                self.manager.set_last_updated(entity_id, event.new_state, self.manual_reset)
 
         _LOGGER.debug("Wait for target: %s", self.wait_for_target)
 
