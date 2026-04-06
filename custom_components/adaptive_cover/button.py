@@ -82,9 +82,15 @@ class AdaptiveCoverButton(
         for entity in self._entities:
             if self.coordinator.manager.is_cover_manual(entity):
                 _LOGGER.debug("Resetting manual override for: %s", entity)
-                await self.coordinator.async_set_position(
-                    entity, self.coordinator.state
-                )
+                if self.coordinator.is_cover_tilt:
+                    await self.coordinator.async_set_position_and_tilt(
+                        entity, self.coordinator.state_pos, self.coordinator.state
+                    )
+                else:
+                    await self.coordinator.async_set_position(
+                        entity, self.coordinator.state
+                    )
+
                 while self.coordinator.wait_for_target.get(entity):
                     await asyncio.sleep(1)
                 self.coordinator.manager.reset(entity)

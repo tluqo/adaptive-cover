@@ -639,6 +639,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         time_check = self.how_much_after_start_time
         return time_check < dt.timedelta(hours=1)
+    
+    @property
+    def is_cover_tilt(self):
+        """Check if it is cover tilt."""
+        return self._cover_type == "cover_tilt"
 
     @property
     def before_end_time(self):
