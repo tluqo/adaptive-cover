@@ -275,10 +275,14 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             await self.async_handle_cover_state_change(state)
         if self.cover_state_change and self._cover_type == "cover_tilt":
             await self.async_handle_cover_state_change2(state_pos, state)
-        if self.first_refresh:
+        if self.first_refresh and not self._cover_type == "cover_tilt":
             await self.async_handle_first_refresh(state, options)
-        if self.timed_refresh:
+        if self.first_refresh and self._cover_type == "cover_tilt":
+            await self.async_handle_first_refresh2(state_pos, state, options)
+        if self.timed_refresh and not self._cover_type == "cover_tilt":
             await self.async_handle_timed_refresh(options)
+        if self.timed_refresh and self._cover_type == "cover_tilt":
+            await self.async_handle_timed_refresh2(options)
 
         normal_cover = self.normal_cover_state.cover
         # Run the solar_times method in a separate thread
@@ -355,7 +359,6 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             )
         self.cover_state_change = False
 
-    # todo: handle pos and tilt for venetian blinds
     async def async_handle_first_refresh(self, state: int, options):
         """Handle first refresh."""
         if self.control_toggle:
@@ -370,6 +373,20 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             _LOGGER.debug("First refresh but control toggle is off")
         self.first_refresh = False
 
+    async def async_handle_first_refresh2(self, position: int, tilt: int, options):
+        """Handle first refresh."""
+        if self.control_toggle:
+            for cover in self.entities:
+                if (
+                    self.check_adaptive_time
+                    and not self.manager.is_cover_manual(cover)
+                    and self.check_position2(cover, position, tilt, options)
+                ):
+                    await self.async_set_position_and_tilt(cover, position, tilt)
+        else:
+            _LOGGER.debug("First refresh but control toggle is off")
+        self.first_refresh = False
+
     async def async_handle_timed_refresh(self, options):
         """Handle timed refresh."""
         if self.control_toggle:
@@ -380,6 +397,27 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                         inverse_state(options.get(CONF_SUNSET_POS))
                         if self._inverse_state
                         else options.get(CONF_SUNSET_POS)
+                    ),
+                )
+        else:
+            _LOGGER.debug("Timed refresh but control toggle is off")
+        self.timed_refresh = False
+
+    async def async_handle_timed_refresh2(self, options):
+        """Handle timed refresh."""
+        if self.control_toggle:
+            for cover in self.entities:
+                await self.async_set_manual_position_and_tilt(
+                    cover,
+                    (
+                        inverse_state(options.get(CONF_SUNSET_POS))
+                        if self._inverse_state
+                        else options.get(CONF_SUNSET_POS)
+                    ),
+                    (
+                        inverse_state(options.get(CONF_SUNSET_TILT))
+                        if self._inverse_state
+                        else options.get(CONF_SUNSET_TILT)
                     ),
                 )
         else:
