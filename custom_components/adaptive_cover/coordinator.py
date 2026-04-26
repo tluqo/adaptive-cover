@@ -718,9 +718,9 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 is_to_edge_position = True
 
             condition = (
-                abs(position - state_pos) >= self.min_change
+                abs(position - state_pos) >= 1
                 or abs(tilt - state_tilt) >= self.min_change
-                or abs(tilt - state_tilt) > 0
+                or abs(tilt - state_tilt) > 1
                 and is_to_edge_position
             )
 
