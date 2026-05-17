@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.template import state_attr
 from numpy import cos, sin, tan
 from numpy import radians as rad
 
@@ -241,7 +240,8 @@ class ClimateCoverData:
                 self.outside_entity,
             )
         if self.weather_entity:
-            temp = state_attr(self.hass, self.weather_entity, "temperature")
+            state = self.hass.states.get(self.weather_entity)
+            temp = state.attributes.get("temperature") if state else None
         return temp
 
     @property
@@ -254,7 +254,8 @@ class ClimateCoverData:
                     self.temp_entity,
                 )
             else:
-                temp = state_attr(self.hass, self.temp_entity, "current_temperature")
+                state = self.hass.states.get(self.temp_entity)
+                temp = state.attributes.get("current_temperature") if state else None
             return temp
 
     @property
@@ -315,6 +316,8 @@ class ClimateCoverData:
             return False
         if self.lux_entity is not None and self.lux_threshold is not None:
             value = get_safe_state(self.hass, self.lux_entity)
+            if value is None:
+                return False
             return float(value) <= self.lux_threshold
         return False
 
@@ -325,6 +328,8 @@ class ClimateCoverData:
             return False
         if self.irradiance_entity is not None and self.irradiance_threshold is not None:
             value = get_safe_state(self.hass, self.irradiance_entity)
+            if value is None:
+                return False
             return float(value) <= self.irradiance_threshold
         return False
 

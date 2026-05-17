@@ -23,7 +23,6 @@ from homeassistant.const import (
     SERVICE_SET_COVER_TILT_POSITION,
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State
-from homeassistant.helpers.template import state_attr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .calculation import (
@@ -483,7 +482,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         """Call service to set cover position."""
 
         if self._cover_type == "cover_tilt":
-            cur_position = state_attr(self.hass, entity, "current_position")
+            state = self.hass.states.get(entity)
+            cur_position = state.attributes.get("current_position") if state else None
 
             if position != cur_position:
                 service = SERVICE_SET_COVER_POSITION
@@ -670,10 +670,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
     def check_position(self, entity, state: int, options):
         """Check cover positions to reduce calls."""
+        state = self.hass.states.get(entity)
         if self._cover_type == "cover_tilt":
-            position = state_attr(self.hass, entity, ATTR_CURRENT_TILT_POSITION)
+            position = state.attributes.get(ATTR_CURRENT_TILT_POSITION) if state else None
         else:
-            position = state_attr(self.hass, entity, ATTR_CURRENT_POSITION)
+            position = state.attributes.get(ATTR_CURRENT_POSITION) if state else None
         if position is not None:
             condition = abs(position - state) >= self.min_change
             _LOGGER.debug(
@@ -697,11 +698,13 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
     def check_position2(self, entity, state_pos: int, state_tilt: int, options):
         """Check cover positions to reduce calls."""
+
+        state = self.hass.states.get(entity)
         if self._cover_type == "cover_tilt":
-            position = state_attr(self.hass, entity, ATTR_CURRENT_POSITION)
-            tilt = state_attr(self.hass, entity, ATTR_CURRENT_TILT_POSITION)
+            position = state.attributes.get(ATTR_CURRENT_POSITION) if state else None
+            tilt = state.attributes.get(ATTR_CURRENT_TILT_POSITION) if state else None
         else:
-            position = state_attr(self.hass, entity, ATTR_CURRENT_POSITION)
+            position = state.attributes.get(ATTR_CURRENT_POSITION) if state else None
             tilt = 0
         if position is not None and tilt is not None:
             # todo: weird hack
@@ -759,9 +762,10 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     @property
     def pos_sun(self):
         """Fetch information for sun position."""
+        state = self.hass.states.get("sun.sun")
         return [
-            state_attr(self.hass, "sun.sun", "azimuth"),
-            state_attr(self.hass, "sun.sun", "elevation"),
+            state.attributes.get("azimuth") if state else None
+            state.attributes.get("elevation") if state else None
         ]
 
     def common_data(self, options):
